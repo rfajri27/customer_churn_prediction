@@ -10,12 +10,11 @@ Usage:
 """
 
 # import libraries
-from sklearn.metrics import classification_report
+from sklearn.metrics import plot_roc_curve, classification_report
 from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import normalize
 import os
 import joblib
 import pandas as pd
@@ -23,9 +22,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set()
-
-
-# os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 
 
 def import_data(pth):
@@ -79,67 +76,76 @@ def perform_eda(df):
     plt.savefig('./images/eda/correlation_heatmap.png')
 
 
-def encoder_helper(df, category_lst):
+def encoder_helper(dataframe, category_lst, response):
     '''
-    helper function to turn each categorical column into a new column with
-    propotion of churn for each category - associated with cell 15 from the notebook
-
+    Helper function to turn each categorical column into a new column with
+    proportion of churn for each category - associated with cell 15 from the churn notebook
     input:
-            df: pandas dataframe
+            data_frame: pandas DataFrame
             category_lst: list of columns that contain categorical features
-
-
+            response: string of response name [optional argument that could be used for
+                      naming variables or index y column]
     output:
-            df: pandas dataframe with new columns for
+            data_frame: pandas DataFrame with new columns for analysis
     '''
-    for category_name in category_lst:
-        category_lst = []
-        category_churn = df.groupby(category_name).mean()["Churn"]
-        for val in df[category_name]:
-            category_lst.append(category_churn.loc[val])
-        df["{}_{}".format(category_name, "Churn")] = category_lst
+    # Copy DataFrmae
+    encoder_df = dataframe.copy(deep=True)
+    
+    for category in category_lst:
+        column_lst = []
+        column_groups = dataframe.groupby(category).mean()['Churn']
 
-    return df
+        for val in dataframe[category]:
+            column_lst.append(column_groups.loc[val])
+
+        if response:
+            encoder_df[category + '_' + response] = column_lst
+        else:
+            encoder_df[category] = column_lst
+
+    
+    return encoder_df
 
 
-def perform_feature_engineering(df):
+def perform_feature_engineering(dataframe, response):
     '''
     input:
-              df: pandas dataframe
-
+              data_frame: pandas DataFrame
+              response: string of response name [optional argument that could be used for
+                        naming variables or index y column]
     output:
               X_train: X training data
               X_test: X testing data
               y_train: y training data
               y_test: y testing data
     '''
-    y = df["Churn"]
-    X = pd.DataFrame()
-    keep_cols = [
-        "Customer_Age",
-        "Dependent_count",
-        "Months_on_book",
-        "Total_Relationship_Count",
-        "Months_Inactive_12_mon",
-        "Contacts_Count_12_mon",
-        "Credit_Limit",
-        "Total_Revolving_Bal",
-        "Avg_Open_To_Buy",
-        "Total_Amt_Chng_Q4_Q1",
-        "Total_Trans_Amt",
-        "Total_Trans_Ct",
-        "Total_Ct_Chng_Q4_Q1",
-        "Avg_Utilization_Ratio",
-        "Gender_Churn",
-        "Education_Level_Churn",
-        "Marital_Status_Churn",
-        "Income_Category_Churn",
-        "Card_Category_Churn"]
-    X[keep_cols] = df[keep_cols]
-    # train test split
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.3, random_state=42)
-    return X_train, X_test, y_train, y_test
+    # categorical features
+    cat_columns = [ 'Gender', 'Education_Level', 'Marital_Status','Income_Category', 'Card_Category'  ]
+
+    # feature engineering
+    encoded_df = encoder_helper(dataframe=dataframe, category_lst=cat_columns, response=response)
+
+    # target feature 
+    y = encoded_df['Churn']     
+
+    # Create dataframe
+    X = pd.DataFrame()         
+
+    keep_cols = ['Customer_Age', 'Dependent_count', 'Months_on_book',
+                 'Total_Relationship_Count', 'Months_Inactive_12_mon',
+                 'Contacts_Count_12_mon', 'Credit_Limit', 'Total_Revolving_Bal',
+                 'Avg_Open_To_Buy', 'Total_Amt_Chng_Q4_Q1', 'Total_Trans_Amt',
+                 'Total_Trans_Ct', 'Total_Ct_Chng_Q4_Q1', 'Avg_Utilization_Ratio',
+                 'Gender_Churn', 'Education_Level_Churn', 'Marital_Status_Churn',
+                 'Income_Category_Churn', 'Card_Category_Churn']
+
+    # Features DataFrame
+    X[keep_cols] = encoded_df[keep_cols]
+
+    # Train and Test split
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)  
+
+    return (X_train, X_test, y_train, y_test)
 
 
 def classification_report_image(y_train,
